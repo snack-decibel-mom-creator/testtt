@@ -153,8 +153,8 @@ def process_batch(batch, batch_num):
     print_action(f"Processing {len(batch)} roll numbers in parallel")
     
     results = []
-    # Reduce concurrent workers for better stability
-    max_workers = min(len(batch), 10)  # Max 10 concurrent workers
+    # Use exactly 5 workers or the batch size if smaller
+    max_workers = min(len(batch), 5)  # Max 5 concurrent workers
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         # Submit all tasks at once
         future_to_roll = {executor.submit(process_single_roll_number, roll): roll for roll in batch}
@@ -198,87 +198,65 @@ def main():
     # For testing, let's use just first 5 roll numbers
     test_mode = False  # Set to False for full automation
     if test_mode:
-        roll_numbers = roll_numbers[:5]
+        roll_numbers = roll_numbers[:10]  # Test with 2 groups
         print_action(f"TEST MODE: Processing first {len(roll_numbers)} roll numbers only")
     
-    # Split into smaller batches for better stability with retry logic
-    batch_size = 10  # Smaller batches for better success rate
-    batches = [roll_numbers[i:i + batch_size] for i in range(0, len(roll_numbers), batch_size)]
+    # Split into groups of 5 roll numbers
+    group_size = 5
+    groups = [roll_numbers[i:i + group_size] for i in range(0, len(roll_numbers), group_size)]
     
-    print_action(f"Split into {len(batches)} batches (max {batch_size} roll numbers each)")
+    print_action(f"Split into {len(groups)} groups of {group_size} roll numbers each")
     
-    # Process all batches in 3 complete runs
-    max_runs = 3
+    # Process each group 5 times before moving to next group
+    cycles_per_group = 5
     all_results = {}
     
-    for run_num in range(1, max_runs + 1):
-        print_action(f"=== STARTING RUN {run_num} of {max_runs} ===")
+    for group_num, group in enumerate(groups, 1):
+        print_action(f"=== STARTING GROUP {group_num} of {len(groups)} ===")
+        print_action(f"Processing roll numbers: {group}")
         
-        # Determine which roll numbers to process in this run
-        if run_num == 1:
-            # First run: process all roll numbers
-            roll_numbers_to_process = roll_numbers
-        else:
-            # Subsequent runs: only process failed ones from previous runs
-            roll_numbers_to_process = [roll for roll, result in all_results.items() if not result['success']]
-            print_action(f"Run {run_num}: Processing {len(roll_numbers_to_process)} previously failed roll numbers")
+        # Process this group 5 times
+        for cycle_num in range(1, cycles_per_group + 1):
+            print_action(f"--- Cycle {cycle_num} of {cycles_per_group} for Group {group_num} ---")
             
-            if not roll_numbers_to_process:
-                print_action(f"All roll numbers already succeeded! Skipping remaining runs.")
-                break
+            # Process the 5 roll numbers in this group
+            batch_results = process_batch(group, group_num)
+            
+            # Update results dictionary (keep the best result for each roll number)
+            for result in batch_results:
+                roll = result['roll_number']
+                if roll not in all_results or result['success']:
+                    all_results[roll] = result
+            
+            # Progress update
+            successful_so_far = sum(1 for r in all_results.values() if r['success'])
+            progress_percent = (successful_so_far / len(roll_numbers)) * 100
+            print_action(f"Overall Progress: {successful_so_far}/{len(roll_numbers)} successful ({progress_percent:.1f}%)")
+            
+            # Save intermediate results after each cycle
+            with open('automation_results_temp.txt', 'w') as f:
+                f.write("Roll Number,Status,Message,Timestamp,Attempts,Group,Cycle\n")
+                for roll, result in all_results.items():
+                    status = "SUCCESS" if result['success'] else "FAILED"
+                    attempts = result.get('attempts', 1)
+                    f.write(f"{roll},{status},{result['message']},{result['timestamp']},{attempts},{group_num},{cycle_num}\n")
+            print_action("Intermediate results saved")
+            
+            # Add delay between cycles
+            if cycle_num < cycles_per_group:
+                delay = random.uniform(2, 5)
+                print_action(f"Waiting {delay:.1f}s before next cycle...")
+                time.sleep(delay)
         
-        # Split into batches for this run
-        current_batches = [roll_numbers_to_process[i:i + batch_size] for i in range(0, len(roll_numbers_to_process), batch_size)]
-        print_action(f"Run {run_num}: Split into {len(current_batches)} batches")
+        # Summary for this group
+        group_successful = sum(1 for roll in group if roll in all_results and all_results[roll]['success'])
+        print_action(f"=== GROUP {group_num} COMPLETE: {group_successful}/{len(group)} successful ===")
         
-        try:
-            for i, batch in enumerate(current_batches, 1):
-                print_action(f"Run {run_num} - Starting batch {i} of {len(current_batches)}")
-                batch_results = process_batch(batch, i)
-                
-                # Update results dictionary (keep the best result for each roll number)
-                for result in batch_results:
-                    roll = result['roll_number']
-                    if roll not in all_results or result['success']:
-                        all_results[roll] = result
-                
-                # Progress update
-                successful_so_far = sum(1 for r in all_results.values() if r['success'])
-                progress_percent = (successful_so_far / len(roll_numbers)) * 100
-                print_action(f"Overall Progress: {successful_so_far}/{len(roll_numbers)} successful ({progress_percent:.1f}%)")
-                
-                # Save intermediate results
-                if i % 3 == 0:  # Save every 3 batches
-                    with open('automation_results_temp.txt', 'w') as f:
-                        f.write("Roll Number,Status,Message,Timestamp,Attempts,Run\n")
-                        for roll, result in all_results.items():
-                            status = "SUCCESS" if result['success'] else "FAILED"
-                            attempts = result.get('attempts', 1)
-                            f.write(f"{roll},{status},{result['message']},{result['timestamp']},{attempts},{run_num}\n")
-                    print_action("Intermediate results saved")
-                
-                # Add delay between batches
-                if i < len(current_batches):
-                    delay = random.uniform(2, 5)
-                    print_action(f"Waiting {delay:.1f}s before next batch...")
-                    time.sleep(delay)
-                    
-        except KeyboardInterrupt:
-            print_action("!!! PROCESSING INTERRUPTED BY USER !!!")
-            print_action("Saving partial results...")
-            break
-        
-        # Summary for this run
-        run_successful = sum(1 for r in all_results.values() if r['success'])
-        run_failed = len(all_results) - run_successful
-        print_action(f"=== RUN {run_num} COMPLETE ===")
-        print_action(f"Overall Status: {run_successful}/{len(roll_numbers)} successful, {run_failed} failed")
-        
-        # Add delay between runs
-        if run_num < max_runs and roll_numbers_to_process:
-            run_delay = random.uniform(5, 10)
-            print_action(f"Waiting {run_delay:.1f}s before next run...")
-            time.sleep(run_delay)
+        # Add delay between groups
+        if group_num < len(groups):
+            group_delay = random.uniform(5, 10)
+            print_action(f"Waiting {group_delay:.1f}s before next group...")
+            time.sleep(group_delay)
     
     # Convert results dictionary to list for final processing
     final_results = list(all_results.values())
@@ -286,7 +264,7 @@ def main():
     # Final summary
     end_time = time.time()
     total_time = end_time - start_time
-    print_action("=== ALL RUNS COMPLETE ===")
+    print_action("=== ALL GROUPS COMPLETE ===")
     total_successful = sum(1 for r in final_results if r['success'])
     total_failed = len(final_results) - total_successful
     print_action(f"Total: {len(final_results)} roll numbers processed")
