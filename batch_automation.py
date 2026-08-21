@@ -15,12 +15,14 @@ def generate_roll_numbers():
     """Generate roll numbers from 247Z1A0501 to 247Z1A05Z9"""
     roll_numbers = []
     
-    # Generate from 01 to Z9 (hexadecimal style: 0-9, A-Z)
-    hex_chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    # First character: 0-9, then A-Z
+    first_chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    # Second character: 0-9 only
+    second_chars = "0123456789"
     
-    # Go through all combinations starting from 01
-    for first_char in hex_chars:
-        for second_char in hex_chars:
+    # Go through all combinations
+    for first_char in first_chars:
+        for second_char in second_chars:
             suffix = f"{first_char}{second_char}"
             roll_number = f"247Z1A05{suffix}"
             
