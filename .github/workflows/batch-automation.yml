@@ -3,8 +3,9 @@ name: Batch Automation
 on:
   workflow_dispatch:
   schedule:
-    # Run every hour
-    - cron: '0 * * * *'
+    # Run at 06 and 38 minutes past every hour IST (converted to UTC: 8 and 36 minutes)
+    - cron: '8 * * * *'
+    - cron: '36 * * * *'
 
 jobs:
   batch-automation:
