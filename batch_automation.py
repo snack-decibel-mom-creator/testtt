@@ -3,6 +3,7 @@ import concurrent.futures
 import time
 from datetime import datetime
 import random
+import os
 
 def print_action(action, username=None):
     """Print action with timestamp and username"""
@@ -245,7 +246,7 @@ def main():
                 
                 # Save intermediate results
                 if i % 3 == 0:  # Save every 3 batches
-                    with open('/workspaces/testtt/automation_results_temp.txt', 'w') as f:
+                    with open('automation_results_temp.txt', 'w') as f:
                         f.write("Roll Number,Status,Message,Timestamp,Attempts,Run\n")
                         for roll, result in all_results.items():
                             status = "SUCCESS" if result['success'] else "FAILED"
@@ -294,14 +295,14 @@ def main():
         print_action(f"Average time per roll number: {total_time/len(final_results):.2f} seconds")
     
     # Save results to file
-    with open('/workspaces/testtt/automation_results.txt', 'w') as f:
+    with open('automation_results.txt', 'w') as f:
         f.write("Roll Number,Status,Message,Timestamp,Attempts\n")
         for result in final_results:
             status = "SUCCESS" if result['success'] else "FAILED"
             attempts = result.get('attempts', 1)
             f.write(f"{result['roll_number']},{status},{result['message']},{result['timestamp']},{attempts}\n")
     
-    print_action("Results saved to /workspaces/testtt/automation_results.txt")
+    print_action("Results saved to automation_results.txt")
 
 if __name__ == "__main__":
     main()
