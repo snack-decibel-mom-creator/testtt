@@ -192,7 +192,7 @@ def main():
     print_action(f"Generated {len(roll_numbers)} roll numbers")
     
     # For testing, let's use just first 5 roll numbers
-    test_mode = False  # Set to False for full automation (run 3 - very fast)
+    test_mode = False  # Set to False for full automation
     if test_mode:
         roll_numbers = roll_numbers[:5]
         print_action(f"TEST MODE: Processing first {len(roll_numbers)} roll numbers only")
@@ -203,56 +203,100 @@ def main():
     
     print_action(f"Split into {len(batches)} batches (max {batch_size} roll numbers each)")
     
-    # Process each batch
-    all_results = []
-    try:
-        for i, batch in enumerate(batches, 1):
-            print_action(f"Starting batch {i} of {len(batches)}")
-            batch_results = process_batch(batch, i)
-            all_results.extend(batch_results)
+    # Process all batches in 3 complete runs
+    max_runs = 3
+    all_results = {}
+    
+    for run_num in range(1, max_runs + 1):
+        print_action(f"=== STARTING RUN {run_num} of {max_runs} ===")
+        
+        # Determine which roll numbers to process in this run
+        if run_num == 1:
+            # First run: process all roll numbers
+            roll_numbers_to_process = roll_numbers
+        else:
+            # Subsequent runs: only process failed ones from previous runs
+            roll_numbers_to_process = [roll for roll, result in all_results.items() if not result['success']]
+            print_action(f"Run {run_num}: Processing {len(roll_numbers_to_process)} previously failed roll numbers")
             
-            # Progress update
-            processed_so_far = len(all_results)
-            progress_percent = (processed_so_far / len(roll_numbers)) * 100
-            print_action(f"Progress: {processed_so_far}/{len(roll_numbers)} ({progress_percent:.1f}%)")
-            
-            # Save intermediate results more frequently with smaller batches
-            if i % 5 == 0:  # Save every 5 batches
-                with open('/workspaces/testtt/automation_results_temp.txt', 'w') as f:
-                    f.write("Roll Number,Status,Message,Timestamp,Attempts\n")
-                    for result in all_results:
-                        status = "SUCCESS" if result['success'] else "FAILED"
-                        attempts = result.get('attempts', 1)
-                        f.write(f"{result['roll_number']},{status},{result['message']},{result['timestamp']},{attempts}\n")
-                print_action("Intermediate results saved")
-            
-            # Add small delay between batches to avoid overwhelming server
-            if i < len(batches):
-                delay = random.uniform(2, 5)
-                print_action(f"Waiting {delay:.1f}s before next batch...")
-                time.sleep(delay)
-    except KeyboardInterrupt:
-        print_action("!!! PROCESSING INTERRUPTED BY USER !!!")
-        print_action(f"Processed {len(all_results)} roll numbers before interruption")
-        print_action("Saving partial results...")
+            if not roll_numbers_to_process:
+                print_action(f"All roll numbers already succeeded! Skipping remaining runs.")
+                break
+        
+        # Split into batches for this run
+        current_batches = [roll_numbers_to_process[i:i + batch_size] for i in range(0, len(roll_numbers_to_process), batch_size)]
+        print_action(f"Run {run_num}: Split into {len(current_batches)} batches")
+        
+        try:
+            for i, batch in enumerate(current_batches, 1):
+                print_action(f"Run {run_num} - Starting batch {i} of {len(current_batches)}")
+                batch_results = process_batch(batch, i)
+                
+                # Update results dictionary (keep the best result for each roll number)
+                for result in batch_results:
+                    roll = result['roll_number']
+                    if roll not in all_results or result['success']:
+                        all_results[roll] = result
+                
+                # Progress update
+                successful_so_far = sum(1 for r in all_results.values() if r['success'])
+                progress_percent = (successful_so_far / len(roll_numbers)) * 100
+                print_action(f"Overall Progress: {successful_so_far}/{len(roll_numbers)} successful ({progress_percent:.1f}%)")
+                
+                # Save intermediate results
+                if i % 3 == 0:  # Save every 3 batches
+                    with open('/workspaces/testtt/automation_results_temp.txt', 'w') as f:
+                        f.write("Roll Number,Status,Message,Timestamp,Attempts,Run\n")
+                        for roll, result in all_results.items():
+                            status = "SUCCESS" if result['success'] else "FAILED"
+                            attempts = result.get('attempts', 1)
+                            f.write(f"{roll},{status},{result['message']},{result['timestamp']},{attempts},{run_num}\n")
+                    print_action("Intermediate results saved")
+                
+                # Add delay between batches
+                if i < len(current_batches):
+                    delay = random.uniform(2, 5)
+                    print_action(f"Waiting {delay:.1f}s before next batch...")
+                    time.sleep(delay)
+                    
+        except KeyboardInterrupt:
+            print_action("!!! PROCESSING INTERRUPTED BY USER !!!")
+            print_action("Saving partial results...")
+            break
+        
+        # Summary for this run
+        run_successful = sum(1 for r in all_results.values() if r['success'])
+        run_failed = len(all_results) - run_successful
+        print_action(f"=== RUN {run_num} COMPLETE ===")
+        print_action(f"Overall Status: {run_successful}/{len(roll_numbers)} successful, {run_failed} failed")
+        
+        # Add delay between runs
+        if run_num < max_runs and roll_numbers_to_process:
+            run_delay = random.uniform(5, 10)
+            print_action(f"Waiting {run_delay:.1f}s before next run...")
+            time.sleep(run_delay)
+    
+    # Convert results dictionary to list for final processing
+    final_results = list(all_results.values())
     
     # Final summary
     end_time = time.time()
     total_time = end_time - start_time
-    print_action("=== PROCESSING COMPLETE ===")
-    total_successful = sum(1 for r in all_results if r['success'])
-    total_failed = len(all_results) - total_successful
-    print_action(f"Total: {len(all_results)} roll numbers processed")
+    print_action("=== ALL RUNS COMPLETE ===")
+    total_successful = sum(1 for r in final_results if r['success'])
+    total_failed = len(final_results) - total_successful
+    print_action(f"Total: {len(final_results)} roll numbers processed")
     print_action(f"Successful: {total_successful}")
     print_action(f"Failed: {total_failed}")
-    if len(all_results) > 0:
+    print_action(f"Success Rate: {(total_successful/len(final_results)*100):.1f}%")
+    if len(final_results) > 0:
         print_action(f"Total time: {total_time:.2f} seconds ({total_time/60:.2f} minutes)")
-        print_action(f"Average time per roll number: {total_time/len(all_results):.2f} seconds")
+        print_action(f"Average time per roll number: {total_time/len(final_results):.2f} seconds")
     
     # Save results to file
     with open('/workspaces/testtt/automation_results.txt', 'w') as f:
         f.write("Roll Number,Status,Message,Timestamp,Attempts\n")
-        for result in all_results:
+        for result in final_results:
             status = "SUCCESS" if result['success'] else "FAILED"
             attempts = result.get('attempts', 1)
             f.write(f"{result['roll_number']},{status},{result['message']},{result['timestamp']},{attempts}\n")
