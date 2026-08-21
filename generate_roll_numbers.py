@@ -1,11 +1,12 @@
 def generate_roll_numbers():
-    """Generate roll numbers from 247Z1A0401 to 247Z1A04Z9, 247Z1A0501 to 247Z1A05Z9, 247Z1A6601 to 247Z1A66Z9, 247Z1A6701 to 247Z1A67Z9, and 257Z1A0401 to 257Z1A04ZZ, 257Z1A0501 to 257Z1A05ZZ, 257Z1A6601 to 257Z1A66ZZ, 257Z1A6701 to 257Z1A67ZZ"""
+    """Generate roll numbers from 247Z1A0401 to 247Z1A04Z9, 247Z1A0501 to 247Z1A05Z9, 247Z1A6601 to 247Z1A66Z9, 247Z1A6701 to 247Z1A67Z9, and 257Z1A0401 to 257Z1A04Z9, 257Z1A0501 to 257Z1A05ZZ, 257Z1A6601 to 257Z1A66Z9, 257Z1A6701 to 257Z1A67Z9"""
     roll_numbers = []
     
     # First character: 0-9, then A-Z
     first_chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    # Second character: 0-9 only for 247 series, A-Z for 257 series beyond Z9
+    # Second character: 0-9 only
     second_chars_numeric = "0123456789"
+    # Second character: A-Z for 257Z1A05 series beyond Z9
     second_chars_alpha = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     # Series identifiers: 04, 05, 66, and 67
     series = ["04", "05", "66", "67"]
@@ -15,8 +16,8 @@ def generate_roll_numbers():
     # Go through all combinations for each prefix and series
     for prefix in prefixes:
         for series_id in series:
-            # For 247 series: stop at Z9
-            if prefix == "247":
+            # For 247 series and 257 series (except 05): stop at Z9
+            if prefix == "247" or series_id != "05":
                 for first_char in first_chars:
                     for second_char in second_chars_numeric:
                         suffix = f"{first_char}{second_char}"
@@ -29,7 +30,7 @@ def generate_roll_numbers():
                         # Stop at Z9 for this series
                         if suffix == "Z9":
                             break
-            # For 257 series: continue to ZZ
+            # For 257Z1A05 series (CSE): continue to ZZ
             else:
                 # First part: 01 to Z9
                 for first_char in first_chars:
@@ -51,7 +52,7 @@ def generate_roll_numbers():
     return roll_numbers
 
 def main():
-    print("Generating roll numbers from 247Z1A (to Z9) and 257Z1A (to ZZ) series with 04, 05, 66, 67 identifiers...")
+    print("Generating roll numbers from 247Z1A and 257Z1A series with 04, 05, 66, 67 identifiers (257Z1A05 extends to ZZ for CSE)...")
     roll_numbers = generate_roll_numbers()
     print(f"Generated {len(roll_numbers)} roll numbers")
     
