@@ -2,6 +2,7 @@ from playwright.sync_api import sync_playwright
 import concurrent.futures
 import time
 from datetime import datetime
+import random
 
 def print_action(action, username=None):
     """Print action with timestamp and username"""
@@ -36,72 +37,109 @@ def generate_roll_numbers():
     
     return roll_numbers
 
-def process_single_roll_number(roll_number):
-    """Process forgot password for a single roll number - simplified and faster"""
+def process_single_roll_number(roll_number, max_retries=3):
+    """Process forgot password for a single roll number with retry logic"""
     result = {
         'roll_number': roll_number,
         'success': False,
         'message': '',
-        'timestamp': datetime.now().strftime("%H:%M:%S")
+        'timestamp': datetime.now().strftime("%H:%M:%S"),
+        'attempts': 0
     }
     
-    try:
-        with sync_playwright() as p:
-            # Launch browser in headless mode with optimized settings
-            browser = p.chromium.launch(
-                headless=True,
-                args=[
-                    '--no-sandbox', 
-                    '--disable-setuid-sandbox', 
-                    '--disable-dev-shm-usage',
-                    '--disable-gpu',
-                    '--no-zygote',
-                    '--disable-extensions'
-                ]
-            )
-            page = browser.new_page()
-            
-            try:
-                # Navigate to the website and wait for load
-                url = "https://nnrg.beessoftware.cloud/studentselfservice"
-                print_action(f"Opening link...", roll_number)
-                page.goto(url, wait_until='domcontentloaded')
-                page.wait_for_load_state('networkidle')
-                print_action("Page loaded", roll_number)
+    for attempt in range(max_retries):
+        result['attempts'] = attempt + 1
+        try:
+            with sync_playwright() as p:
+                # Launch browser in headless mode with optimized settings
+                browser = p.chromium.launch(
+                    headless=True,
+                    args=[
+                        '--no-sandbox', 
+                        '--disable-setuid-sandbox', 
+                        '--disable-dev-shm-usage',
+                        '--disable-gpu',
+                        '--no-zygote',
+                        '--disable-extensions',
+                        '--disable-web-security',
+                        '--disable-features=IsolateOrigins,site-per-process'
+                    ]
+                )
+                page = browser.new_page()
                 
-                # Find and enter roll number in username field
-                print_action(f"Entering roll number: {roll_number}", roll_number)
-                username_field = page.locator('#txt_UserName')
-                username_field.wait_for(state='visible', timeout=10000)
-                username_field.fill(roll_number)
-                print_action("Roll number entered", roll_number)
-                
-                # Click forgot password link
-                print_action("Clicking forgot password", roll_number)
-                forgot_password_link = page.locator('#lbl_forgotpassword')
-                forgot_password_link.wait_for(state='visible', timeout=5000)
-                forgot_password_link.click()
-                print_action("Forgot password clicked", roll_number)
-                
-                # Wait a moment for the click to register
-                page.wait_for_timeout(1000)
-                
-                result['message'] = "Completed successfully"
-                result['success'] = True
+                try:
+                    # Navigate to the website and wait for load
+                    url = "https://nnrg.beessoftware.cloud/studentselfservice"
+                    print_action(f"Opening link... (Attempt {attempt + 1}/{max_retries})", roll_number)
                     
-            except Exception as e:
-                result['message'] = f"Error: {str(e)}"
+                    # Set longer timeout for page load
+                    page.goto(url, wait_until='domcontentloaded', timeout=60000)
+                    
+                    # Wait for network to be idle with longer timeout
+                    try:
+                        page.wait_for_load_state('networkidle', timeout=30000)
+                    except:
+                        # If networkidle fails, continue anyway as page might be functional
+                        pass
+                    
+                    print_action("Page loaded", roll_number)
+                    
+                    # Add small random delay to avoid overwhelming server
+                    time.sleep(random.uniform(0.5, 1.5))
+                    
+                    # Find and enter roll number in username field
+                    print_action(f"Entering roll number: {roll_number}", roll_number)
+                    username_field = page.locator('#txt_UserName')
+                    username_field.wait_for(state='visible', timeout=15000)
+                    username_field.fill(roll_number)
+                    print_action("Roll number entered", roll_number)
+                    
+                    # Small delay before clicking
+                    time.sleep(random.uniform(0.3, 0.8))
+                    
+                    # Click forgot password link
+                    print_action("Clicking forgot password", roll_number)
+                    forgot_password_link = page.locator('#lbl_forgotpassword')
+                    forgot_password_link.wait_for(state='visible', timeout=10000)
+                    forgot_password_link.click()
+                    print_action("Forgot password clicked", roll_number)
+                    
+                    # Wait a moment for the click to register
+                    page.wait_for_timeout(2000)
+                    
+                    result['message'] = "Completed successfully"
+                    result['success'] = True
+                    break  # Success - exit retry loop
+                        
+                except Exception as e:
+                    error_msg = str(e)
+                    result['message'] = f"Error (Attempt {attempt + 1}/{max_retries}): {error_msg}"
+                    print_action(f"Error (Attempt {attempt + 1}/{max_retries}): {error_msg}", roll_number)
+                    
+                    if attempt < max_retries - 1:
+                        # Wait before retry with exponential backoff
+                        wait_time = (2 ** attempt) * random.uniform(1, 3)
+                        print_action(f"Retrying in {wait_time:.1f}s...", roll_number)
+                        time.sleep(wait_time)
+                    else:
+                        result['success'] = False
+                        
+                finally:
+                    browser.close()
+                    print_action("Browser closed", roll_number)
+                    
+        except Exception as e:
+            error_msg = str(e)
+            result['message'] = f"Browser error (Attempt {attempt + 1}/{max_retries}): {error_msg}"
+            print_action(f"Browser error (Attempt {attempt + 1}/{max_retries}): {error_msg}", roll_number)
+            
+            if attempt < max_retries - 1:
+                # Wait before retry with exponential backoff
+                wait_time = (2 ** attempt) * random.uniform(1, 3)
+                print_action(f"Retrying in {wait_time:.1f}s...", roll_number)
+                time.sleep(wait_time)
+            else:
                 result['success'] = False
-                print_action(f"Error: {str(e)}", roll_number)
-                
-            finally:
-                browser.close()
-                print_action("Browser closed", roll_number)
-                
-    except Exception as e:
-        result['message'] = f"Browser error: {str(e)}"
-        result['success'] = False
-        print_action(f"Browser error: {str(e)}", roll_number)
     
     return result
 
@@ -111,8 +149,10 @@ def process_batch(batch, batch_num):
     print_action(f"Processing {len(batch)} roll numbers in parallel")
     
     results = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(batch)) as executor:
-        # Submit all tasks at once for maximum parallelism
+    # Reduce concurrent workers for better stability
+    max_workers = min(len(batch), 10)  # Max 10 concurrent workers
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all tasks at once
         future_to_roll = {executor.submit(process_single_roll_number, roll): roll for roll in batch}
         
         # Process as they complete for immediate feedback
@@ -122,20 +162,23 @@ def process_batch(batch, batch_num):
                 result = future.result()
                 results.append(result)
                 status = "✅" if result['success'] else "❌"
-                print_action(f"{status} {roll} - {result['message']}", roll)
+                attempt_info = f" (Attempt {result['attempts']})" if 'attempts' in result else ""
+                print_action(f"{status} {roll}{attempt_info} - {result['message']}", roll)
             except Exception as e:
                 print_action(f"❌ {roll} - Exception: {str(e)}", roll)
                 results.append({
                     'roll_number': roll,
                     'success': False,
                     'message': f"Exception: {str(e)}",
-                    'timestamp': datetime.now().strftime("%H:%M:%S")
+                    'timestamp': datetime.now().strftime("%H:%M:%S"),
+                    'attempts': 1
                 })
     
     # Summary for this batch
     successful = sum(1 for r in results if r['success'])
     failed = len(results) - successful
-    print_action(f"=== Batch {batch_num} Complete: {successful} successful, {failed} failed ===")
+    avg_attempts = sum(r.get('attempts', 1) for r in results) / len(results) if results else 1
+    print_action(f"=== Batch {batch_num} Complete: {successful} successful, {failed} failed (avg {avg_attempts:.1f} attempts) ===")
     
     return results
 
@@ -154,8 +197,8 @@ def main():
         roll_numbers = roll_numbers[:5]
         print_action(f"TEST MODE: Processing first {len(roll_numbers)} roll numbers only")
     
-    # Split into batches of 50 for maximum speed (run 3 - very fast)
-    batch_size = 50
+    # Split into smaller batches for better stability with retry logic
+    batch_size = 10  # Smaller batches for better success rate
     batches = [roll_numbers[i:i + batch_size] for i in range(0, len(roll_numbers), batch_size)]
     
     print_action(f"Split into {len(batches)} batches (max {batch_size} roll numbers each)")
@@ -173,18 +216,21 @@ def main():
             progress_percent = (processed_so_far / len(roll_numbers)) * 100
             print_action(f"Progress: {processed_so_far}/{len(roll_numbers)} ({progress_percent:.1f}%)")
             
-            # Save intermediate results less frequently for speed
-            if i % 10 == 0:  # Save every 10 batches
+            # Save intermediate results more frequently with smaller batches
+            if i % 5 == 0:  # Save every 5 batches
                 with open('/workspaces/testtt/automation_results_temp.txt', 'w') as f:
-                    f.write("Roll Number,Status,Message,Timestamp\n")
+                    f.write("Roll Number,Status,Message,Timestamp,Attempts\n")
                     for result in all_results:
                         status = "SUCCESS" if result['success'] else "FAILED"
-                        f.write(f"{result['roll_number']},{status},{result['message']},{result['timestamp']}\n")
+                        attempts = result.get('attempts', 1)
+                        f.write(f"{result['roll_number']},{status},{result['message']},{result['timestamp']},{attempts}\n")
                 print_action("Intermediate results saved")
             
-            # No delay between batches for maximum speed
+            # Add small delay between batches to avoid overwhelming server
             if i < len(batches):
-                print_action("Starting next batch immediately...")
+                delay = random.uniform(2, 5)
+                print_action(f"Waiting {delay:.1f}s before next batch...")
+                time.sleep(delay)
     except KeyboardInterrupt:
         print_action("!!! PROCESSING INTERRUPTED BY USER !!!")
         print_action(f"Processed {len(all_results)} roll numbers before interruption")
@@ -205,10 +251,11 @@ def main():
     
     # Save results to file
     with open('/workspaces/testtt/automation_results.txt', 'w') as f:
-        f.write("Roll Number,Status,Message,Timestamp\n")
+        f.write("Roll Number,Status,Message,Timestamp,Attempts\n")
         for result in all_results:
             status = "SUCCESS" if result['success'] else "FAILED"
-            f.write(f"{result['roll_number']},{status},{result['message']},{result['timestamp']}\n")
+            attempts = result.get('attempts', 1)
+            f.write(f"{result['roll_number']},{status},{result['message']},{result['timestamp']},{attempts}\n")
     
     print_action("Results saved to /workspaces/testtt/automation_results.txt")
 
