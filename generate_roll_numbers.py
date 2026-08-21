@@ -1,13 +1,13 @@
 def generate_roll_numbers():
-    """Generate roll numbers from 247Z1A0501 to 247Z1A05Z9 and 247Z1A6601 to 247Z1A66Z9"""
+    """Generate roll numbers from 247Z1A0401 to 247Z1A04Z9, 247Z1A0501 to 247Z1A05Z9, 247Z1A6601 to 247Z1A66Z9, and 247Z1A6701 to 247Z1A67Z9"""
     roll_numbers = []
     
     # First character: 0-9, then A-Z
     first_chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     # Second character: 0-9 only
     second_chars = "0123456789"
-    # Series identifiers: 05 and 66
-    series = ["05", "66"]
+    # Series identifiers: 04, 05, 66, and 67
+    series = ["04", "05", "66", "67"]
     
     # Go through all combinations for each series
     for series_id in series:
@@ -27,7 +27,7 @@ def generate_roll_numbers():
     return roll_numbers
 
 def main():
-    print("Generating roll numbers from 247Z1A0501 to 247Z1A05Z9 and 247Z1A6601 to 247Z1A66Z9...")
+    print("Generating roll numbers from 247Z1A0401 to 247Z1A04Z9, 247Z1A0501 to 247Z1A05Z9, 247Z1A6601 to 247Z1A66Z9, and 247Z1A6701 to 247Z1A67Z9...")
     roll_numbers = generate_roll_numbers()
     print(f"Generated {len(roll_numbers)} roll numbers")
     
