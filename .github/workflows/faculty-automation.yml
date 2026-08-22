@@ -1,49 +1,78 @@
-name: Faculty Automation
+name: Faculty Forgot Password Automation
 
 on:
   workflow_dispatch:
   schedule:
     # Run 4 times per day (every 6 hours) at 00:00, 06:00, 12:00, 18:00 UTC
     - cron: '0 0,6,12,18 * * *'
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'faculty_automation.py'
+      - 'faculty_institution_ids.csv'
+      - '.github/workflows/faculty-automation.yml'
 
 jobs:
   faculty-automation:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-      
-      - name: Install Playwright browsers
-        run: |
-          playwright install chromium
-      
-      - name: Run faculty automation
-        run: |
-          python faculty_automation.py
-      
-      - name: Upload results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: faculty-automation-results
-          path: faculty_automation_results.txt
-          retention-days: 30
-      
-      - name: Upload temp results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: faculty-automation-results-temp
-          path: faculty_automation_results_temp.txt
-          retention-days: 7
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Install Playwright browsers
+      run: |
+        playwright install chromium
+    
+    - name: Run faculty automation
+      run: |
+        python faculty_automation.py
+    
+    - name: Upload results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: faculty-automation-results
+        path: faculty_automation_results.txt
+        retention-days: 30
+    
+    - name: Upload temp results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: faculty-automation-results-temp
+        path: faculty_automation_results_temp.txt
+        retention-days: 7
+    
+    - name: Upload screenshots (if enabled)
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: faculty-screenshots
+        path: screenshots/
+        retention-days: 7
+      continue-on-error: true
+    
+    - name: Create summary
+      if: always()
+      run: |
+        echo "## Faculty Automation Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Summary Statistics" >> $GITHUB_STEP_SUMMARY
+        if [ -f faculty_automation_results.txt ]; then
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          head -20 faculty_automation_results.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+        else
+          echo "No results file found" >> $GITHUB_STEP_SUMMARY
+        fi
