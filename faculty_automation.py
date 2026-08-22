@@ -248,8 +248,8 @@ def main():
     
     print_action(f"Split into {len(groups)} groups of {group_size} faculty IDs each")
     
-    # Process each group 1 time for full automation (5 times for testing)
-    cycles_per_group = 1 if not test_mode else 5
+    # Process each group 5 times for full automation (repeat each faculty ID 5 times per group)
+    cycles_per_group = 5
     all_results = {}
     
     for group_num, group in enumerate(groups, 1):
