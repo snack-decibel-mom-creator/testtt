@@ -1,0 +1,49 @@
+name: Faculty Automation
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Run 4 times per day (every 6 hours) at 00:00, 06:00, 12:00, 18:00 UTC
+    - cron: '0 0,6,12,18 * * *'
+
+jobs:
+  faculty-automation:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Install Playwright browsers
+        run: |
+          playwright install chromium
+      
+      - name: Run faculty automation
+        run: |
+          python faculty_automation.py
+      
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: faculty-automation-results
+          path: faculty_automation_results.txt
+          retention-days: 30
+      
+      - name: Upload temp results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: faculty-automation-results-temp
+          path: faculty_automation_results_temp.txt
+          retention-days: 7
